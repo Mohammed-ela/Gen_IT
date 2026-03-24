@@ -4,6 +4,24 @@ Gen_IT est une application Next.js de qualification commerciale B2B construite a
 
 L'objectif est simple: rechercher des entreprises, enrichir leur lecture avec des signaux issus de sources officielles, puis aider a prioriser les comptes les plus interessants via un scoring et un reranking ICP.
 
+## Demo
+
+- Production: https://gen-ai-it.netlify.app/
+
+## Captures
+
+### Landing page
+
+![Landing page](./screenshot/landing.png)
+
+### Recherche
+
+![Recherche](./screenshot/recherche.png)
+
+### Fiche entreprise
+
+![Fiche entreprise](./screenshot/information_entreprise.png)
+
 ## Fonctionnalites
 
 - Recherche d'entreprises via SIRENE
