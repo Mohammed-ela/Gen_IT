@@ -234,7 +234,7 @@ export default function SearchPageClient() {
 
   return (
     <AppLayout>
-      <div className="container-dashboard px-1 sm:px-0 py-6 sm:py-8">
+      <div className="container-dashboard px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6 max-w-3xl">
           <h1 className="text-2xl font-bold tracking-tight" style={{ color: "hsl(var(--text))" }}>
             Recherche d&apos;entreprises

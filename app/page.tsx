@@ -31,7 +31,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "hsl(var(--bg))" }}>
       <header className="border-b" style={{ borderColor: "hsl(var(--border-subtle))" }}>
-        <div className="container-dashboard px-5 sm:px-6 lg:px-8 h-11 flex items-center justify-between">
+        <div className="container-dashboard px-4 sm:px-6 h-11 flex items-center justify-between">
           <span className="text-base font-extrabold tracking-tight select-none">
             <span style={{ color: "hsl(var(--text))" }}>Gen</span>
             <span style={{ color: "hsl(var(--accent))" }}>_IT</span>
@@ -76,7 +76,7 @@ export default function LandingPage() {
           }}
         />
 
-        <div className="container-dashboard px-8 sm:px-10 lg:px-14 py-20 sm:py-24 w-full">
+        <div className="container-dashboard px-4 sm:px-6 py-20 sm:py-24 w-full">
           <div className="max-w-3xl animate-fade-up relative z-10">
             <div className="flex items-center gap-2 mb-8 animate-fade-up">
               <span
@@ -173,7 +173,7 @@ export default function LandingPage() {
       </section>
 
       <section className="border-t" style={{ borderColor: "hsl(var(--border-subtle))" }}>
-        <div className="container-dashboard px-5 sm:px-6 lg:px-8 py-10 sm:py-14">
+        <div className="container-dashboard px-4 sm:px-6 py-10 sm:py-14">
           <div
             className="grid grid-cols-1 xl:grid-cols-3"
             style={{
@@ -216,7 +216,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t py-5" style={{ borderColor: "hsl(var(--border-subtle))" }}>
-        <div className="container-dashboard px-5 sm:px-6 lg:px-8 flex items-center justify-between">
+        <div className="container-dashboard px-4 sm:px-6 flex items-center justify-between">
           <span className="text-xs font-mono" style={{ color: "hsl(var(--text-faint))" }}>
             © 2026 Gen_IT
           </span>
