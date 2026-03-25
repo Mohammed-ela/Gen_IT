@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           WebkitBackdropFilter: "blur(16px)",
         }}
       >
-        <div className="container-dashboard h-11 flex items-center justify-between px-1 sm:px-0">
+        <div className="container-dashboard h-11 flex items-center justify-between px-4 sm:px-6">
           <Link href="/" className="group select-none">
             <span className="text-base font-extrabold tracking-tight" style={{ color: "hsl(var(--text))" }}>
               Gen
