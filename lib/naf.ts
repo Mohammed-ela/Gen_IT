@@ -121,10 +121,13 @@ export const NAF_LABELS: Record<string, string> = {
  * Retourne le libellé d'un code NAF
  * Si non trouvé, retourne le code lui-même
  */
+export function normalizeNaf(code: string): string {
+  return code.replace(".", "").toUpperCase();
+}
+
 export function getNafLabel(code: string): string {
   if (!code) return "";
-  const normalized = code.replace(".", "").toUpperCase();
-  return NAF_LABELS[normalized] ?? code;
+  return NAF_LABELS[normalizeNaf(code)] ?? code;
 }
 
 /**

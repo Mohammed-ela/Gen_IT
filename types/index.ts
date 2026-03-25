@@ -172,6 +172,13 @@ export type BusinessSignal =
   | "ess"
   | "cession_fonds";
 
+// ─── Company enrichie avec scoring ICP ───────────────────────────────────────
+
+export interface CompanyWithFit extends Company {
+  fitScore: number;
+  fitReasons: string[];
+}
+
 // ─── Recherche ───────────────────────────────────────────────────────────────
 
 export interface SearchFilters {

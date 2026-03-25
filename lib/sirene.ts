@@ -45,6 +45,7 @@ export async function searchSirene(params: {
 
   const res = await fetch(url.toString(), {
     headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(8000),
     next: { revalidate: 3600 },
   });
 
@@ -60,6 +61,7 @@ export async function getCompanyBySiren(siren: string): Promise<SireneResult | n
 
     const res = await fetch(url.toString(), {
       headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(8000),
       next: { revalidate: 1800 },
     });
 
