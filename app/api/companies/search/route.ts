@@ -3,6 +3,15 @@ import { searchSirene, normalizeSireneResult } from "@/lib/sirene";
 import { computeScore } from "@/lib/scoring";
 import type { SearchResponse } from "@/types";
 
+// Convertit une période relative (ex: "3", "6", "24" mois) en date ISO
+function resolveCreatedAfter(value: string): Date | null {
+  const months = parseInt(value, 10);
+  if (isNaN(months) || months <= 0) return null;
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  return d;
+}
+
 export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
 
@@ -15,6 +24,8 @@ export async function GET(request: NextRequest) {
   const sort = sp.get("sort") ?? "score";
   const page = parseInt(sp.get("page") ?? "1", 10);
   const limit = Math.min(parseInt(sp.get("limit") ?? "20", 10), 50);
+  const minScore = parseInt(sp.get("minScore") ?? "0", 10);
+  const createdAfterRaw = sp.get("createdAfter") ?? "";
 
   try {
     const sireneData = await searchSirene({
@@ -69,8 +80,23 @@ export async function GET(request: NextRequest) {
       companies.sort((a, b) => b.score - a.score);
     }
 
+    // Filtres post-scoring (non supportés nativement par SIRENE)
+    let filtered = companies;
+    if (minScore > 0) {
+      filtered = filtered.filter((c) => c.score >= minScore);
+    }
+    if (createdAfterRaw) {
+      const cutoff = resolveCreatedAfter(createdAfterRaw);
+      if (cutoff) {
+        const cutoffMs = cutoff.getTime();
+        filtered = filtered.filter((c) =>
+          c.creationDate ? new Date(c.creationDate).getTime() >= cutoffMs : false
+        );
+      }
+    }
+
     const response: SearchResponse = {
-      data: companies as SearchResponse["data"],
+      data: filtered as SearchResponse["data"],
       total: sireneData.total_results,
       page: sireneData.page,
       limit: sireneData.per_page,
@@ -81,7 +107,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[/api/companies/search]", error);
     return NextResponse.json(
-      { error: "Erreur lors de la recherche. Veuillez reessayer." },
+      { error: "Erreur lors de la recherche. Veuillez réessayer." },
       { status: 500 },
     );
   }

@@ -2,27 +2,39 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { MapPin, Users, Calendar, ArrowUpRight, Star } from "lucide-react";
+import { MapPin, Users, Calendar, ArrowUpRight, Star, TrendingUp } from "lucide-react";
 import ScoreBadge from "@/components/scoring/ScoreBadge";
 import SignalBadge from "@/components/scoring/SignalBadge";
-import type { Company } from "@/types";
+import type { CompanyWithFit } from "@/types";
 import { isFavoriteSiren, toggleFavoriteSiren } from "@/lib/favorites";
+import { EMPLOYEE_RANGES } from "@/types";
 
-export default function CompanyCard({ company }: { company: Company }) {
+export default function CompanyCard({ company }: { company: CompanyWithFit }) {
   const [isFavorite, setIsFavorite] = useState(false);
 
   const ageInMonths = company.creationDate
-    ? Math.round(
-        (Date.now() - new Date(company.creationDate).getTime()) / (1000 * 60 * 60 * 24 * 30),
-      )
+    ? Math.round((Date.now() - new Date(company.creationDate).getTime()) / (1000 * 60 * 60 * 24 * 30))
     : null;
 
   const ageLabel =
-    ageInMonths === null ? null : ageInMonths < 12 ? `${ageInMonths} mois` : `${Math.round(ageInMonths / 12)} ans`;
+    ageInMonths === null
+      ? null
+      : ageInMonths < 12
+        ? `${ageInMonths} mois`
+        : `${Math.round(ageInMonths / 12)} ans`;
+
+  const latestFinance = company.finances?.[0];
+  const margeNette =
+    latestFinance?.ca && latestFinance?.resultatNet != null && latestFinance.ca > 0
+      ? Math.round((latestFinance.resultatNet / latestFinance.ca) * 100)
+      : null;
+
+  const employeeLabel = company.employeeRange && company.employeeRange !== "NN"
+    ? EMPLOYEE_RANGES[company.employeeRange] ?? `${company.employeeRange} sal.`
+    : null;
 
   useEffect(() => {
     setIsFavorite(isFavoriteSiren(company.siren));
-
     const sync = () => setIsFavorite(isFavoriteSiren(company.siren));
     window.addEventListener("favorites:changed", sync);
     return () => window.removeEventListener("favorites:changed", sync);
@@ -67,9 +79,20 @@ export default function CompanyCard({ company }: { company: Company }) {
               {company.name}
             </span>
             <span className="text-[11px] font-mono" style={{ color: "hsl(var(--text-faint))" }}>
-              SIREN {company.siren}
+              {company.siren}
             </span>
-            {typeof (company as Company & { fitScore?: number }).fitScore === "number" && (
+            {company.categoryEntreprise && (
+              <span
+                className="text-[11px] px-2 py-0.5 rounded font-medium"
+                style={{
+                  backgroundColor: "hsl(var(--surface-2))",
+                  color: "hsl(var(--text-faint))",
+                }}
+              >
+                {company.categoryEntreprise}
+              </span>
+            )}
+            {company.fitScore !== company.score && (
               <span
                 className="text-[11px] px-2 py-0.5 rounded font-medium"
                 style={{
@@ -77,14 +100,14 @@ export default function CompanyCard({ company }: { company: Company }) {
                   color: "hsl(var(--accent))",
                 }}
               >
-                Fit ICP {(company as Company & { fitScore?: number }).fitScore}
+                Fit {company.fitScore}
               </span>
             )}
           </div>
 
           {company.nafLabel && (
             <p className="text-sm max-w-3xl" style={{ color: "hsl(var(--accent))" }}>
-              {company.nafCode} - {company.nafLabel}
+              {company.nafCode} — {company.nafLabel}
             </p>
           )}
         </div>
@@ -93,20 +116,28 @@ export default function CompanyCard({ company }: { company: Company }) {
           {company.city && (
             <span className="flex items-center gap-1 text-xs" style={{ color: "hsl(var(--text-faint))" }}>
               <MapPin className="w-3 h-3" />
-              {company.city}
-              {company.department ? ` · ${company.department}` : ""}
+              {company.city}{company.department ? ` · ${company.department}` : ""}
             </span>
           )}
-          {company.employeeRange && company.employeeRange !== "NN" && (
+          {employeeLabel && (
             <span className="flex items-center gap-1 text-xs" style={{ color: "hsl(var(--text-faint))" }}>
               <Users className="w-3 h-3" />
-              {company.employeeRange} sal.
+              {employeeLabel}
             </span>
           )}
           {ageLabel && (
             <span className="flex items-center gap-1 text-xs" style={{ color: "hsl(var(--text-faint))" }}>
               <Calendar className="w-3 h-3" />
               {ageLabel}
+            </span>
+          )}
+          {margeNette !== null && (
+            <span
+              className="flex items-center gap-1 text-xs font-mono"
+              style={{ color: margeNette >= 0 ? "hsl(var(--emerald))" : "hsl(var(--red))" }}
+            >
+              <TrendingUp className="w-3 h-3" />
+              marge {margeNette > 0 ? "+" : ""}{margeNette}%
             </span>
           )}
         </div>
@@ -119,12 +150,11 @@ export default function CompanyCard({ company }: { company: Company }) {
           </div>
         )}
 
-        {Array.isArray((company as Company & { fitReasons?: string[] }).fitReasons) &&
-          (company as Company & { fitReasons?: string[] }).fitReasons!.length > 0 && (
-            <p className="text-[11px]" style={{ color: "hsl(var(--text-faint))" }}>
-              Match: {(company as Company & { fitReasons?: string[] }).fitReasons!.join(" · ")}
-            </p>
-          )}
+        {company.fitReasons.length > 0 && company.fitScore !== company.score && (
+          <p className="text-[11px]" style={{ color: "hsl(var(--text-faint))" }}>
+            Match : {company.fitReasons.join(" · ")}
+          </p>
+        )}
       </div>
 
       <div className="hidden md:flex items-start justify-end">

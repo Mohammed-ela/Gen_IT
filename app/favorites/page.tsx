@@ -6,7 +6,11 @@ import AppLayout from "@/components/layout/AppLayout";
 import CompanyCard from "@/components/companies/CompanyCard";
 import { buildCompaniesCsv } from "@/lib/export";
 import { getFavoriteSirens } from "@/lib/favorites";
-import type { Company } from "@/types";
+import type { Company, CompanyWithFit } from "@/types";
+
+function toFit(c: Company): CompanyWithFit {
+  return { ...c, fitScore: c.score, fitReasons: [] };
+}
 
 export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<Company[]>([]);
@@ -153,7 +157,7 @@ export default function FavoritesPage() {
 
             <div className="grid gap-3">
               {favorites.map((company) => (
-                <CompanyCard key={company.siren} company={company} />
+                <CompanyCard key={company.siren} company={toFit(company)} />
               ))}
             </div>
           </div>
