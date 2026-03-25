@@ -76,7 +76,7 @@ export default function LandingPage() {
           }}
         />
 
-        <div className="container-dashboard px-4 sm:px-6 py-20 sm:py-24 w-full">
+        <div className="container-dashboard px-8 sm:px-10 lg:px-16 py-20 sm:py-24 w-full">
           <div className="max-w-3xl animate-fade-up relative z-10">
             <div className="flex items-center gap-2 mb-8 animate-fade-up">
               <span
