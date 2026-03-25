@@ -6,7 +6,7 @@ import { Search, SlidersHorizontal, X, Loader2 } from "lucide-react";
 import CompanyCard from "@/components/companies/CompanyCard";
 import SearchFilters from "@/components/search/SearchFilters";
 import AppLayout from "@/components/layout/AppLayout";
-import type { Company, SearchFilters as Filters, SearchResponse } from "@/types";
+import type { Company, CompanyWithFit, SearchFilters as Filters, SearchResponse } from "@/types";
 import { buildCompaniesCsv } from "@/lib/export";
 import { getFavoriteSirens } from "@/lib/favorites";
 import {
@@ -20,12 +20,15 @@ import {
 type SortOption = "score" | "recent" | "name";
 
 function parseFilters(params: URLSearchParams): Filters {
+  const minScoreRaw = params.get("minScore");
   return {
     nafCode: params.get("nafCode") ?? undefined,
     department: params.get("department") ?? undefined,
     postalCode: params.get("postalCode") ?? undefined,
     employeeRange: params.get("employeeRange") ?? undefined,
     legalForm: params.get("legalForm") ?? undefined,
+    minScore: minScoreRaw ? parseInt(minScoreRaw, 10) : undefined,
+    createdAfter: params.get("createdAfter") ?? undefined,
   };
 }
 
@@ -48,29 +51,25 @@ export default function SearchPageClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const initialQuery = searchParams.get("query") ?? "";
-  const initialFilters = useMemo(() => parseFilters(searchParams), [searchParams]);
-  const initialPage = Number(searchParams.get("page") ?? "1");
-  const initialSort = (searchParams.get("sort") as SortOption) || "score";
-  const initialIcpProfile = (searchParams.get("icp") as IcpProfile) || "default";
-  const initialCustomIcp = useMemo(() => parseCustomIcp(searchParams), [searchParams]);
-
-  const [query, setQuery] = useState(initialQuery);
-  const [filters, setFilters] = useState<Filters>(initialFilters);
-  const [sort, setSort] = useState<SortOption>(initialSort);
+  const [query, setQuery] = useState(() => searchParams.get("query") ?? "");
+  const [filters, setFilters] = useState<Filters>(() => parseFilters(searchParams));
+  const [sort, setSort] = useState<SortOption>(() => (searchParams.get("sort") as SortOption) || "score");
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(initialPage);
+  const [currentPage, setCurrentPage] = useState(() => Number(searchParams.get("page") ?? "1"));
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [favoriteSirens, setFavoriteSirens] = useState<string[]>([]);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [icpProfile, setIcpProfile] = useState<IcpProfile>(initialIcpProfile);
-  const [customIcp, setCustomIcp] = useState<CustomIcpSettings>(initialCustomIcp);
+  const [icpProfile, setIcpProfile] = useState<IcpProfile>(() => (searchParams.get("icp") as IcpProfile) || "default");
+  const [customIcp, setCustomIcp] = useState<CustomIcpSettings>(() => parseCustomIcp(searchParams));
 
-  const hydratedRef = useRef(false);
+  // Ref pour annuler les requêtes en cours si une nouvelle part avant la fin
+  const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  // Indique que l'hydration initiale est terminée
+  const didInitRef = useRef(false);
 
   const syncUrl = useCallback(
     (q: string, f: Filters, page: number, sortBy: SortOption, profile: IcpProfile, custom: CustomIcpSettings) => {
@@ -81,6 +80,8 @@ export default function SearchPageClient() {
       if (f.postalCode) params.set("postalCode", f.postalCode);
       if (f.employeeRange) params.set("employeeRange", f.employeeRange);
       if (f.legalForm) params.set("legalForm", f.legalForm);
+      if (f.minScore) params.set("minScore", String(f.minScore));
+      if (f.createdAfter) params.set("createdAfter", f.createdAfter);
       if (sortBy !== "score") params.set("sort", sortBy);
       if (profile !== "default") params.set("icp", profile);
       if (profile === "custom") {
@@ -91,7 +92,6 @@ export default function SearchPageClient() {
         if (custom.prefersMultiSite) params.set("icp_multi", "1");
       }
       if (page > 1) params.set("page", String(page));
-
       const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
       router.replace(nextUrl, { scroll: false });
     },
@@ -105,8 +105,8 @@ export default function SearchPageClient() {
       page = 1,
       sortBy: SortOption = "score",
       updateUrl = true,
-      profile: IcpProfile = icpProfile,
-      custom: CustomIcpSettings = customIcp,
+      profile: IcpProfile = "default",
+      custom: CustomIcpSettings = DEFAULT_CUSTOM_ICP,
     ) => {
       if (!hasSearchState(q, f)) {
         setResults(null);
@@ -115,6 +115,10 @@ export default function SearchPageClient() {
         if (updateUrl) syncUrl("", {}, 1, "score", profile, custom);
         return;
       }
+
+      // Annule la requête précédente si elle tourne encore
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
 
       setLoading(true);
       setError(null);
@@ -127,11 +131,15 @@ export default function SearchPageClient() {
         if (f.postalCode) params.set("postalCode", f.postalCode);
         if (f.employeeRange) params.set("employeeRange", f.employeeRange);
         if (f.legalForm) params.set("legalForm", f.legalForm);
+        if (f.minScore) params.set("minScore", String(f.minScore));
+        if (f.createdAfter) params.set("createdAfter", f.createdAfter);
         params.set("sort", sortBy);
         params.set("page", String(page));
         params.set("limit", "20");
 
-        const res = await fetch(`/api/companies/search?${params.toString()}`);
+        const res = await fetch(`/api/companies/search?${params.toString()}`, {
+          signal: abortRef.current.signal,
+        });
         if (!res.ok) throw new Error("Erreur lors de la recherche");
 
         const data: SearchResponse = await res.json();
@@ -139,42 +147,52 @@ export default function SearchPageClient() {
         setCurrentPage(page);
         if (updateUrl) syncUrl(q, f, page, sortBy, profile, custom);
       } catch (err) {
+        // Ignore les annulations volontaires
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Erreur inconnue");
       } finally {
         setLoading(false);
       }
     },
-    [syncUrl, icpProfile, customIcp],
+    [syncUrl],
   );
 
+  // Ref toujours à jour pour les effets qui n'ont pas doSearch en dep
+  const doSearchRef = useRef(doSearch);
+  useEffect(() => { doSearchRef.current = doSearch; }, [doSearch]);
+
+  // Hydration initiale — état depuis l'URL, puis déclenche la recherche si besoin
+  // On ne met pas doSearch en dep pour éviter la boucle : user tape → doSearch change → effet reset query
   useEffect(() => {
-    const startingFilters = parseFilters(new URLSearchParams(searchParams.toString()));
-    const startingQuery = searchParams.get("query") ?? "";
-    const startingPage = Number(searchParams.get("page") ?? "1");
-    const startingSort = (searchParams.get("sort") as SortOption) || "score";
-    const startingIcpProfile = (searchParams.get("icp") as IcpProfile) || "default";
-    const startingCustomIcp = parseCustomIcp(new URLSearchParams(searchParams.toString()));
+    const urlQuery = searchParams.get("query") ?? "";
+    const urlFilters = parseFilters(searchParams);
+    const urlPage = Number(searchParams.get("page") ?? "1");
+    const urlSort = (searchParams.get("sort") as SortOption) || "score";
+    const urlProfile = (searchParams.get("icp") as IcpProfile) || "default";
+    const urlCustom = parseCustomIcp(searchParams);
 
-    setQuery(startingQuery);
-    setFilters(startingFilters);
-    setSort(startingSort);
-    setCurrentPage(startingPage);
-    setIcpProfile(startingIcpProfile);
-    setCustomIcp(startingCustomIcp);
+    setQuery(urlQuery);
+    setFilters(urlFilters);
+    setSort(urlSort);
+    setCurrentPage(urlPage);
+    setIcpProfile(urlProfile);
+    setCustomIcp(urlCustom);
 
-    if (hasSearchState(startingQuery, startingFilters)) {
-      void doSearch(startingQuery, startingFilters, startingPage, startingSort, false, startingIcpProfile, startingCustomIcp);
+    if (hasSearchState(urlQuery, urlFilters)) {
+      void doSearchRef.current(urlQuery, urlFilters, urlPage, urlSort, false, urlProfile, urlCustom);
     }
 
-    hydratedRef.current = true;
-  }, [searchParams, doSearch]);
+    didInitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
+  // Debounce sur les saisies utilisateur — ne s'active qu'après l'hydration
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!didInitRef.current) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      void doSearch(query, filters, 1, sort, true);
+      void doSearch(query, filters, 1, sort, true, icpProfile, customIcp);
     }, 350);
 
     return () => {
@@ -182,11 +200,12 @@ export default function SearchPageClient() {
     };
   }, [query, filters, sort, icpProfile, customIcp, doSearch]);
 
+  // Sync des favoris (localStorage → state)
   useEffect(() => {
     const sync = () => {
-      const favorites = getFavoriteSirens();
-      setFavoriteCount(favorites.length);
-      setFavoriteSirens(favorites);
+      const favs = getFavoriteSirens();
+      setFavoriteCount(favs.length);
+      setFavoriteSirens(favs);
     };
     sync();
     window.addEventListener("favorites:changed", sync);
@@ -196,21 +215,22 @@ export default function SearchPageClient() {
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const hasFilters = showFilters || activeFilterCount > 0;
   const hasActiveSearch = hasSearchState(query, filters);
-  const rankedResults = (results?.data ?? [])
-    .map((company) => {
-      const fit = computeIcpFit(company, icpProfile, customIcp);
-      return {
-        ...company,
-        fitScore: fit.fitScore,
-        fitReasons: fit.reasons,
-      };
-    })
-    .sort((a, b) => {
-      if (icpProfile === "default") return 0;
-      return b.fitScore - a.fitScore;
-    });
+
+  // ICP scoring — mémoïsé pour ne pas recalculer à chaque rendu non lié
+  const rankedResults = useMemo<CompanyWithFit[]>(() => {
+    return (results?.data ?? [])
+      .map((company) => {
+        const fit = computeIcpFit(company, icpProfile, customIcp);
+        return { ...company, fitScore: fit.fitScore, fitReasons: fit.reasons };
+      })
+      .sort((a, b) => {
+        if (icpProfile === "default") return 0;
+        return b.fitScore - a.fitScore;
+      });
+  }, [results?.data, icpProfile, customIcp]);
+
   const visibleResults = favoritesOnly
-    ? rankedResults.filter((company) => favoriteSirens.includes(company.siren))
+    ? rankedResults.filter((c) => favoriteSirens.includes(c.siren))
     : rankedResults;
 
   const exportCsv = useCallback(() => {
@@ -240,8 +260,7 @@ export default function SearchPageClient() {
             Recherche d&apos;entreprises
           </h1>
           <p className="text-sm mt-1.5 max-w-2xl" style={{ color: "hsl(var(--text-muted))" }}>
-            Base SIRENE avec scoring, tri et URL partageable pour reprendre une analyse sans
-            perdre le contexte.
+            Base SIRENE — scoring, filtres et URL partageable.
           </p>
         </div>
 
@@ -263,10 +282,10 @@ export default function SearchPageClient() {
                     Recherche
                   </p>
                   <p className="text-sm mt-1" style={{ color: "hsl(var(--text-muted))" }}>
-                    Recherche instantanee, filtres persistants et partageables.
+                    Filtres persistants et URL partageable.
                   </p>
                   <p className="text-[11px] mt-2" style={{ color: "hsl(var(--text-faint))" }}>
-                    {favoriteCount} favori{favoriteCount > 1 ? "s" : ""} sauvegarde{favoriteCount > 1 ? "s" : ""}
+                    {favoriteCount} favori{favoriteCount > 1 ? "s" : ""} sauvegardé{favoriteCount > 1 ? "s" : ""}
                   </p>
                 </div>
                 <button
@@ -275,21 +294,19 @@ export default function SearchPageClient() {
                   className="inline-flex xl:hidden items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium"
                   style={{
                     backgroundColor: hasFilters ? "hsl(var(--accent-muted))" : "hsl(var(--surface-2))",
-                    borderColor: hasFilters
-                      ? "hsl(var(--accent) / 0.35)"
-                      : "hsl(var(--border-subtle))",
+                    borderColor: hasFilters ? "hsl(var(--accent) / 0.35)" : "hsl(var(--border-subtle))",
                     color: hasFilters ? "hsl(var(--accent))" : "hsl(var(--text-muted))",
                   }}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
-                  Filtres
+                  Filtres{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
                 </button>
               </div>
 
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void doSearch(query, filters, 1, sort, true);
+                  void doSearch(query, filters, 1, sort, true, icpProfile, customIcp);
                 }}
                 className="space-y-3"
               >
@@ -302,7 +319,7 @@ export default function SearchPageClient() {
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Nom d'entreprise, SIREN, activite..."
+                    placeholder="Nom, SIREN, activité..."
                     className="w-full pl-9 pr-9 py-3 text-sm rounded-xl border outline-none transition-all"
                     style={{
                       backgroundColor: "hsl(var(--surface-2))",
@@ -349,7 +366,7 @@ export default function SearchPageClient() {
 
                 <button
                   type="button"
-                  onClick={() => setFavoritesOnly((value) => !value)}
+                  onClick={() => setFavoritesOnly((v) => !v)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all"
                   style={{
                     backgroundColor: favoritesOnly ? "hsl(var(--accent-muted))" : "hsl(var(--surface))",
@@ -357,7 +374,7 @@ export default function SearchPageClient() {
                     color: favoritesOnly ? "hsl(var(--accent))" : "hsl(var(--text-muted))",
                   }}
                 >
-                  {favoritesOnly ? "Affichage: favoris" : "Afficher seulement mes favoris"}
+                  {favoritesOnly ? "Affichage : favoris" : "Favoris uniquement"}
                 </button>
 
                 <div className="space-y-1">
@@ -394,10 +411,10 @@ export default function SearchPageClient() {
                         onChange={(e) => setCustomField("targetSector", e.target.value as CustomIcpSettings["targetSector"])}
                         className="field-input"
                       >
-                        <option value="any">Indifferent</option>
+                        <option value="any">Indifférent</option>
                         <option value="tech">Tech</option>
                         <option value="industry">Industrie / BTP</option>
-                        <option value="distributed">Reseau distribue</option>
+                        <option value="distributed">Réseau distribué</option>
                       </select>
                     </div>
 
@@ -410,7 +427,7 @@ export default function SearchPageClient() {
                         onChange={(e) => setCustomField("minEmployees", e.target.value as CustomIcpSettings["minEmployees"])}
                         className="field-input"
                       >
-                        <option value="any">Indifferente</option>
+                        <option value="any">Indifférente</option>
                         <option value="small">Petite structure</option>
                         <option value="medium">PME / taille moyenne</option>
                       </select>
@@ -418,19 +435,19 @@ export default function SearchPageClient() {
 
                     <div className="grid gap-2">
                       <ToggleRow
-                        label="Favoriser entreprises recentes"
+                        label="Favoriser entreprises récentes"
                         checked={customIcp.prefersRecent}
-                        onChange={(value) => setCustomField("prefersRecent", value)}
+                        onChange={(v) => setCustomField("prefersRecent", v)}
                       />
                       <ToggleRow
                         label="Favoriser signaux de croissance"
                         checked={customIcp.prefersGrowth}
-                        onChange={(value) => setCustomField("prefersGrowth", value)}
+                        onChange={(v) => setCustomField("prefersGrowth", v)}
                       />
                       <ToggleRow
                         label="Favoriser structures multi-sites"
                         checked={customIcp.prefersMultiSite}
-                        onChange={(value) => setCustomField("prefersMultiSite", value)}
+                        onChange={(v) => setCustomField("prefersMultiSite", v)}
                       />
                     </div>
                   </div>
@@ -461,21 +478,19 @@ export default function SearchPageClient() {
               <div className="max-w-5xl space-y-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
-                    <p
-                      className="text-[11px] uppercase tracking-[0.18em]"
-                      style={{ color: "hsl(var(--text-faint))" }}
-                    >
-                      Resultats
+                    <p className="text-[11px] uppercase tracking-[0.18em]" style={{ color: "hsl(var(--text-faint))" }}>
+                      Résultats
                     </p>
                     <p className="text-sm mt-1" style={{ color: "hsl(var(--text-muted))" }}>
                       <span className="font-semibold" style={{ color: "hsl(var(--text))" }}>
                         {favoritesOnly ? visibleResults.length.toLocaleString("fr-FR") : results.total.toLocaleString("fr-FR")}
                       </span>{" "}
-                      entreprises{favoritesOnly ? " favorites" : ""}
+                      entreprise{(favoritesOnly ? visibleResults.length : results.total) > 1 ? "s" : ""}
+                      {favoritesOnly ? " favorites" : ""}
                     </p>
                     {icpProfile !== "default" && (
                       <p className="text-[11px] mt-1" style={{ color: "hsl(var(--accent))" }}>
-                        Rerank selon: {ICP_LABELS[icpProfile]}
+                        Reranké selon : {ICP_LABELS[icpProfile]}
                       </p>
                     )}
                   </div>
@@ -502,17 +517,17 @@ export default function SearchPageClient() {
                       className="field-input min-w-[11rem]"
                     >
                       <option value="score">Score descendant</option>
-                      <option value="recent">Creation recente</option>
-                      <option value="name">Nom A-Z</option>
+                      <option value="recent">Création récente</option>
+                      <option value="name">Nom A–Z</option>
                     </select>
                     <span className="text-xs font-mono" style={{ color: "hsl(var(--text-faint))" }}>
-                      page {currentPage}/{results.totalPages}
+                      {currentPage}/{results.totalPages}
                     </span>
                   </div>
                 </div>
 
                 <div className="grid gap-3">
-                  {visibleResults.map((company: Company) => (
+                  {visibleResults.map((company: CompanyWithFit) => (
                     <CompanyCard key={company.siren} company={company} />
                   ))}
                 </div>
@@ -520,14 +535,14 @@ export default function SearchPageClient() {
                 {results.totalPages > 1 && !favoritesOnly && (
                   <div className="flex justify-center gap-2 pt-4">
                     <PageBtn
-                      label="Precedent"
+                      label="Précédent"
                       disabled={currentPage <= 1}
-                      onClick={() => void doSearch(query, filters, currentPage - 1, sort, true)}
+                      onClick={() => void doSearch(query, filters, currentPage - 1, sort, true, icpProfile, customIcp)}
                     />
                     <PageBtn
                       label="Suivant"
                       disabled={currentPage >= results.totalPages}
-                      onClick={() => void doSearch(query, filters, currentPage + 1, sort, true)}
+                      onClick={() => void doSearch(query, filters, currentPage + 1, sort, true, icpProfile, customIcp)}
                     />
                   </div>
                 )}
@@ -561,11 +576,10 @@ export default function SearchPageClient() {
                   <Search className="w-5 h-5" style={{ color: "hsl(var(--text-faint))" }} />
                 </div>
                 <p className="text-base font-medium" style={{ color: "hsl(var(--text))" }}>
-                  Lance une recherche pour afficher une liste structuree.
+                  Lance une recherche pour afficher une liste.
                 </p>
                 <p className="text-sm mt-2 max-w-xl" style={{ color: "hsl(var(--text-muted))" }}>
-                  Ton URL gardera les filtres et le tri. Pratique pour reprendre une analyse ou
-                  partager un segment.
+                  L&apos;URL garde les filtres et le tri — pratique pour partager un segment ou reprendre plus tard.
                 </p>
               </div>
             )}
@@ -579,11 +593,10 @@ export default function SearchPageClient() {
                 }}
               >
                 <p className="text-base font-medium" style={{ color: "hsl(var(--text))" }}>
-                  Aucun resultat avec ces criteres.
+                  Aucun résultat avec ces critères.
                 </p>
                 <p className="text-sm mt-2" style={{ color: "hsl(var(--text-muted))" }}>
-                  Elargis le departement, retire un filtre d&apos;effectif ou repasse le tri sur
-                  score.
+                  Élargis le département, retire un filtre ou baisse le score minimum.
                 </p>
               </div>
             )}
@@ -597,10 +610,10 @@ export default function SearchPageClient() {
                 }}
               >
                 <p className="text-base font-medium" style={{ color: "hsl(var(--text))" }}>
-                  Aucun favori dans ce jeu de resultats.
+                  Aucun favori dans ce jeu de résultats.
                 </p>
                 <p className="text-sm mt-2" style={{ color: "hsl(var(--text-muted))" }}>
-                  Ajoute des entreprises avec l&apos;etoile puis reactive ce filtre.
+                  Ajoute des entreprises avec l&apos;étoile puis réactive ce filtre.
                 </p>
               </div>
             )}
@@ -611,15 +624,7 @@ export default function SearchPageClient() {
   );
 }
 
-function PageBtn({
-  label,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-}) {
+function PageBtn({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -636,15 +641,7 @@ function PageBtn({
   );
 }
 
-function ToggleRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
+function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-center justify-between gap-3 text-xs" style={{ color: "hsl(var(--text-muted))" }}>
       <span>{label}</span>
