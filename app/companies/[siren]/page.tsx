@@ -19,7 +19,9 @@ import type { BodaccAnalysis } from "@/lib/bodacc";
 import { getBodaccEventColor } from "@/lib/bodacc";
 
 async function getCompany(siren: string) {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+  const base =
+    process.env.NEXT_PUBLIC_API_URL ??
+    (process.env.URL ? process.env.URL : "http://localhost:3000");
   const res = await fetch(`${base}/api/companies/${siren}`, { cache: "no-store" });
   if (!res.ok) return null;
   return res.json();
@@ -45,7 +47,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
 
   return (
     <AppLayout>
-      <div className="container-dashboard px-1 sm:px-0 py-6 sm:py-8">
+      <div className="container-dashboard px-4 sm:px-6 py-6 sm:py-8">
         {/* Retour */}
         <Link href="/search" className="inline-flex items-center gap-1.5 text-xs mb-6 transition-colors"
           style={{ color: "hsl(var(--text-faint))" }}>
