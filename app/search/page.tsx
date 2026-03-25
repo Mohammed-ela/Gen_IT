@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 function SearchPageFallback() {
   return (
-    <div className="container-dashboard px-1 sm:px-0 py-6 sm:py-8">
+    <div className="container-dashboard px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6 max-w-3xl">
         <div
           className="h-8 w-64 rounded-lg animate-pulse"
