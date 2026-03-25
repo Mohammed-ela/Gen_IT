@@ -1,4 +1,5 @@
 import type { Company } from "@/types";
+import { normalizeNaf } from "@/lib/naf";
 
 export type IcpProfile = "default" | "startup_saas" | "pme_industrielle" | "reseau_multi_sites" | "custom";
 
@@ -45,7 +46,7 @@ export function computeIcpFit(
   let score = 0;
   const reasons: string[] = [];
   const employeeRange = company.employeeRange ?? "";
-  const nafCode = (company.nafCode ?? "").replace(".", "").toUpperCase();
+  const nafCode = normalizeNaf(company.nafCode ?? "");
   const ageInMonths = company.creationDate
     ? Math.round((Date.now() - new Date(company.creationDate).getTime()) / (1000 * 60 * 60 * 24 * 30))
     : null;
@@ -125,7 +126,7 @@ function computeCustomFit(company: Company, custom: CustomIcpSettings): {
   let score = Math.round(company.score * 0.25);
   const reasons: string[] = [];
   const employeeRange = company.employeeRange ?? "";
-  const nafCode = (company.nafCode ?? "").replace(".", "").toUpperCase();
+  const nafCode = normalizeNaf(company.nafCode ?? "");
   const section = company.nafSection ?? "";
   const ageInMonths = company.creationDate
     ? Math.round((Date.now() - new Date(company.creationDate).getTime()) / (1000 * 60 * 60 * 24 * 30))

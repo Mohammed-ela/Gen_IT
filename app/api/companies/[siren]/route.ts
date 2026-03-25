@@ -55,7 +55,7 @@ export async function GET(
       ...normalized,
       score,
       scoreDetails: details,
-      signals: [...new Set([...signals, ...bodacc.signals.filter((s) => !signals.includes(s as any))])],
+      signals: [...new Set([...signals, ...bodacc.signals])],
       lastBodaccEvent: bodacc.lastEvent ?? null,
       lastBodaccDate: bodacc.lastEventDate ?? null,
       capitalSocial: bodacc.capitalSocial ?? null,

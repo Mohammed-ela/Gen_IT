@@ -10,7 +10,7 @@ import SignalBadge from "@/components/scoring/SignalBadge";
 import ScoreBreakdown from "@/components/scoring/ScoreBreakdown";
 import AppLayout from "@/components/layout/AppLayout";
 import type {
-  BodaccRecord, Dirigeant, BeneficiaireEffectif,
+  Company, BodaccRecord, Dirigeant, BeneficiaireEffectif,
   FinancialYear, Etablissement, ConventionCollective,
 } from "@/types";
 import { EMPLOYEE_RANGES, REGIONS } from "@/types";
@@ -22,7 +22,9 @@ async function getCompany(siren: string) {
   const base =
     process.env.NEXT_PUBLIC_API_URL ??
     (process.env.URL ? process.env.URL : "http://localhost:3000");
-  const res = await fetch(`${base}/api/companies/${siren}`, { cache: "no-store" });
+  const res = await fetch(`${base}/api/companies/${siren}`, {
+    next: { revalidate: 1800 }, // 30 min — les données SIRENE bougent peu
+  });
   if (!res.ok) return null;
   return res.json();
 }
@@ -33,7 +35,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
   if (!data) notFound();
 
   const { company: c, bodaccEvents, bodaccAnalysis } = data as {
-    company: any;
+    company: Company;
     bodaccEvents: BodaccRecord[];
     bodaccAnalysis: BodaccAnalysis;
   };
@@ -98,10 +100,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
               </div>
 
               {/* Signaux */}
-              {c.signals?.length > 0 && (
+              {(c.signals?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t"
                   style={{ borderColor: "hsl(var(--border-subtle))" }}>
-                  {c.signals.map((s: string) => <SignalBadge key={s} signal={s} />)}
+                  {(c.signals ?? []).map((s: string) => <SignalBadge key={s} signal={s} />)}
                 </div>
               )}
             </div>
@@ -208,11 +210,11 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
             </Card>
 
             {/* Finances détaillées */}
-            {c.finances?.length > 0 && (
+            {(c.finances?.length ?? 0) > 0 && (
               <Card title="Données financières">
                 <div className="space-y-3">
-                  {c.finances.slice(0, 4).map((f: FinancialYear, i: number) => {
-                    const prev = c.finances[i + 1];
+                  {(c.finances ?? []).slice(0, 4).map((f: FinancialYear, i: number) => {
+                    const prev = (c.finances ?? [])[i + 1];
                     const growth = f.ca && prev?.ca ? computeGrowth(f.ca, prev.ca) : null;
                     return (
                       <div key={f.annee}
@@ -256,10 +258,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
             )}
 
             {/* Dirigeants */}
-            {c.dirigeants?.length > 0 && (
-              <Card title={`Direction (${c.dirigeants.length})`}>
+            {(c.dirigeants?.length ?? 0) > 0 && (
+              <Card title={`Direction (${c.dirigeants!.length})`}>
                 <div className="space-y-3">
-                  {c.dirigeants.map((d: Dirigeant, i: number) => (
+                  {(c.dirigeants ?? []).map((d: Dirigeant, i: number) => (
                     <div key={i} className="flex items-start gap-3 py-2 border-b last:border-0"
                       style={{ borderColor: "hsl(var(--border-subtle))" }}>
                       <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
@@ -302,10 +304,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
             )}
 
             {/* Bénéficiaires effectifs */}
-            {c.beneficiairesEffectifs?.length > 0 && (
-              <Card title={`Bénéficiaires effectifs (${c.beneficiairesEffectifs.length})`}>
+            {(c.beneficiairesEffectifs?.length ?? 0) > 0 && (
+              <Card title={`Bénéficiaires effectifs (${c.beneficiairesEffectifs!.length})`}>
                 <div className="space-y-2">
-                  {c.beneficiairesEffectifs.map((b: BeneficiaireEffectif, i: number) => (
+                  {(c.beneficiairesEffectifs ?? []).map((b: BeneficiaireEffectif, i: number) => (
                     <div key={i} className="flex items-center justify-between py-2 border-b last:border-0"
                       style={{ borderColor: "hsl(var(--border-subtle))" }}>
                       <div>
@@ -361,10 +363,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
             )}
 
             {/* Convention collective */}
-            {c.conventionsCollectives?.length > 0 && (
+            {(c.conventionsCollectives?.length ?? 0) > 0 && (
               <Card title="Convention collective">
                 <div className="space-y-2">
-                  {c.conventionsCollectives.map((cc: ConventionCollective, i: number) => (
+                  {(c.conventionsCollectives ?? []).map((cc: ConventionCollective, i: number) => (
                     <div key={i} className="flex items-start gap-3">
                       <Briefcase className="w-4 h-4 mt-0.5 flex-shrink-0"
                         style={{ color: "hsl(var(--text-faint))" }} />
@@ -391,10 +393,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
             )}
 
             {/* Établissements */}
-            {c.etablissements?.length > 1 && (
-              <Card title={`Établissements (${c.etablissements.length})`}>
+            {(c.etablissements?.length ?? 0) > 1 && (
+              <Card title={`Établissements (${c.etablissements!.length})`}>
                 <div className="space-y-2">
-                  {c.etablissements.slice(0, 8).map((e: Etablissement) => (
+                  {(c.etablissements ?? []).slice(0, 8).map((e: Etablissement) => (
                     <div key={e.siret} className="flex items-center justify-between py-2 border-b last:border-0 text-sm"
                       style={{ borderColor: "hsl(var(--border-subtle))" }}>
                       <div>
@@ -422,9 +424,9 @@ export default async function CompanyPage({ params }: { params: Promise<{ siren:
                       )}
                     </div>
                   ))}
-                  {c.etablissements.length > 8 && (
+                  {c.etablissements!.length > 8 && (
                     <p className="text-[11px] pt-1" style={{ color: "hsl(var(--text-faint))" }}>
-                      + {c.etablissements.length - 8} autres établissements
+                      + {c.etablissements!.length - 8} autres établissements
                     </p>
                   )}
                 </div>

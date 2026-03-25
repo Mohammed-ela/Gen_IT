@@ -1,6 +1,7 @@
 import type { ScoreDetails, BusinessSignal, FinancialYear, CompanyComplements } from "@/types";
 import { TECH_NAF_CODES } from "@/types";
 import { computeGrowth } from "@/lib/sirene";
+import { normalizeNaf } from "@/lib/naf";
 
 interface ScoringInput {
   creationDate?: string | null;
@@ -61,7 +62,7 @@ function scoreRecency(d?: string | null): number {
 
 function scoreActivity(naf?: string | null): number {
   if (!naf) return 4;
-  const n = naf.replace(".", "").toUpperCase();
+  const n = normalizeNaf(naf);
   if ((TECH_NAF_CODES as readonly string[]).includes(n)) return 20;
   if (["7022Z", "7010Z", "7490A", "7490B", "7112B", "8559A", "8559B"].includes(n)) return 15;
   if (["7311Z", "7312Z", "6499Z", "7820Z", "7830Z", "8220Z"].includes(n)) return 12;
@@ -71,16 +72,9 @@ function scoreActivity(naf?: string | null): number {
 function scoreSize(range?: string | null): number {
   if (!range || range === "NN") return 6;
   const scores: Record<string, number> = {
-    "00": 4,
-    "01": 8,
-    "02": 11,
-    "03": 13,
-    "11": 15,
-    "12": 13,
-    "21": 11,
-    "22": 9,
-    "31": 7,
-    "32": 5,
+    "00": 4, "01": 8, "02": 11, "03": 13,
+    "11": 15, "12": 13, "21": 11, "22": 9,
+    "31": 7, "32": 5,
   };
   return scores[range] ?? 6;
 }
@@ -135,8 +129,9 @@ function detectSignals(input: ScoringInput): BusinessSignal[] {
   }
 
   if (input.nafCode) {
-    const normalized = input.nafCode.replace(".", "").toUpperCase();
-    if ((TECH_NAF_CODES as readonly string[]).includes(normalized)) out.push("secteur_tech");
+    if ((TECH_NAF_CODES as readonly string[]).includes(normalizeNaf(input.nafCode))) {
+      out.push("secteur_tech");
+    }
   }
 
   if (input.finances?.length) {
@@ -177,84 +172,84 @@ export const SIGNAL_LABELS: Record<
   { label: string; style: { bg: string; color: string; border: string }; description: string }
 > = {
   creation_recente: {
-    label: "Creation recente",
+    label: "Création récente",
     style: { bg: "hsl(158 60% 36% / 0.12)", color: "hsl(158 60% 46%)", border: "hsl(158 60% 36% / 0.3)" },
-    description: "Entreprise creee il y a moins de 2 ans",
+    description: "Créée il y a moins de 2 ans",
   },
   augmentation_capital: {
     label: "Augmentation capital",
     style: { bg: "hsl(243 75% 63% / 0.12)", color: "hsl(243 75% 70%)", border: "hsl(243 75% 63% / 0.3)" },
-    description: "Augmentation de capital detectee au BODACC",
+    description: "Augmentation de capital au BODACC",
   },
   modification_siege: {
-    label: "Transfert siege",
+    label: "Transfert siège",
     style: { bg: "hsl(200 80% 50% / 0.12)", color: "hsl(200 80% 60%)", border: "hsl(200 80% 50% / 0.3)" },
-    description: "Transfert de siege ou changement de localisation",
+    description: "Transfert de siège détecté au BODACC",
   },
   ca_disponible: {
-    label: "CA publie",
+    label: "CA publié",
     style: { bg: "hsl(38 85% 50% / 0.12)", color: "hsl(38 85% 58%)", border: "hsl(38 85% 50% / 0.3)" },
     description: "Chiffre d'affaires disponible",
   },
   resultat_positif: {
     label: "Rentable",
     style: { bg: "hsl(158 60% 36% / 0.12)", color: "hsl(158 60% 46%)", border: "hsl(158 60% 36% / 0.3)" },
-    description: "Resultat net positif sur le dernier exercice",
+    description: "Résultat net positif sur le dernier exercice",
   },
   croissance_ca: {
     label: "CA en hausse",
     style: { bg: "hsl(158 80% 36% / 0.15)", color: "hsl(158 80% 50%)", border: "hsl(158 80% 36% / 0.35)" },
-    description: "Croissance du chiffre d'affaires superieure a 10%",
+    description: "Croissance CA supérieure à 10%",
   },
   multi_etablissements: {
     label: "Multi-sites",
     style: { bg: "hsl(220 60% 55% / 0.12)", color: "hsl(220 60% 65%)", border: "hsl(220 60% 55% / 0.3)" },
-    description: "Presence sur plusieurs sites en France",
+    description: "Présence sur plusieurs sites",
   },
   secteur_tech: {
     label: "Secteur tech",
     style: { bg: "hsl(243 75% 63% / 0.10)", color: "hsl(243 75% 72%)", border: "hsl(243 75% 63% / 0.25)" },
-    description: "Secteur numerique ou informatique",
+    description: "Secteur numérique ou informatique",
   },
   structure_juridique_solide: {
     label: "SAS / SA",
     style: { bg: "hsl(220 10% 50% / 0.10)", color: "hsl(220 10% 62%)", border: "hsl(220 10% 50% / 0.25)" },
-    description: "Structure juridique plutot solide pour le B2B",
+    description: "Structure solide pour le B2B",
   },
   dirigeant_identifie: {
     label: "Dirigeant connu",
     style: { bg: "hsl(24 80% 50% / 0.10)", color: "hsl(24 80% 60%)", border: "hsl(24 80% 50% / 0.25)" },
-    description: "Identite du dirigeant disponible",
+    description: "Identité du dirigeant disponible",
   },
   beneficiaires_connus: {
-    label: "Beneficiaires",
+    label: "Bénéficiaires",
     style: { bg: "hsl(280 60% 55% / 0.10)", color: "hsl(280 60% 65%)", border: "hsl(280 60% 55% / 0.25)" },
-    description: "Beneficiaires effectifs identifies",
+    description: "Bénéficiaires effectifs identifiés",
   },
   convention_collective: {
     label: "Convention",
     style: { bg: "hsl(200 60% 45% / 0.10)", color: "hsl(200 60% 55%)", border: "hsl(200 60% 45% / 0.25)" },
-    description: "Convention collective renseignee",
+    description: "Convention collective renseignée",
   },
   label_qualite: {
-    label: "Label qualite",
+    label: "Label qualité",
     style: { bg: "hsl(170 60% 40% / 0.10)", color: "hsl(170 60% 50%)", border: "hsl(170 60% 40% / 0.25)" },
     description: "Certification RGE, Bio ou Qualiopi",
   },
   societe_mission: {
-    label: "Societe a mission",
+    label: "Société à mission",
     style: { bg: "hsl(38 70% 50% / 0.10)", color: "hsl(38 70% 58%)", border: "hsl(38 70% 50% / 0.25)" },
-    description: "Mission ou raison d'etre inscrite aux statuts",
+    description: "Raison d'être inscrite aux statuts",
   },
   ess: {
     label: "ESS",
     style: { bg: "hsl(158 50% 38% / 0.12)", color: "hsl(158 50% 48%)", border: "hsl(158 50% 38% / 0.3)" },
-    description: "Economie sociale et solidaire",
+    description: "Économie sociale et solidaire",
   },
   cession_fonds: {
     label: "Cession",
     style: { bg: "hsl(12 80% 55% / 0.10)", color: "hsl(12 80% 64%)", border: "hsl(12 80% 55% / 0.25)" },
-    description: "Cession ou vente de fonds detectee au BODACC",
+    description: "Cession de fonds détectée au BODACC",
   },
 };
 
@@ -274,7 +269,7 @@ export function getScoreCategory(score: number): {
   }
   if (score >= 45) {
     return {
-      label: "Tiede",
+      label: "Tiède",
       color: "hsl(38 85% 58%)",
       bg: "hsl(38 85% 50% / 0.12)",
       border: "hsl(38 85% 50% / 0.35)",
