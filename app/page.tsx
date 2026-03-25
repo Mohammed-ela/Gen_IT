@@ -76,8 +76,8 @@ export default function LandingPage() {
           }}
         />
 
-        <div className="container-dashboard px-8 sm:px-10 lg:px-16 py-20 sm:py-24 w-full">
-          <div className="max-w-3xl animate-fade-up relative z-10">
+        <div className="container-dashboard px-8 sm:px-10 lg:px-16 py-20 sm:py-24 w-full flex items-center justify-between gap-16">
+          <div className="max-w-3xl animate-fade-up relative z-10 flex-1">
             <div className="flex items-center gap-2 mb-8 animate-fade-up">
               <span
                 className="inline-flex items-center gap-2 text-xs font-mono tracking-widest uppercase px-3 py-1.5 rounded border animate-pulse-soft"
@@ -142,11 +142,11 @@ export default function LandingPage() {
             />
           </div>
 
-          <div className="absolute right-6 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-4 animate-fade-up animate-delay-300">
+          <div className="hidden xl:flex flex-col gap-4 animate-fade-up animate-delay-300 flex-shrink-0">
             {STATS.map((s) => (
               <div
                 key={s.label}
-                className="rounded border p-4 min-w-[140px] animate-fade-up"
+                className="rounded border p-4 min-w-[148px] animate-fade-up"
                 style={{
                   backgroundColor: "hsl(var(--surface))",
                   borderColor: "hsl(var(--border-subtle))",

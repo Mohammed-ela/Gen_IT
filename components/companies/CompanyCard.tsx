@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { MapPin, Users, Calendar, ArrowUpRight, Star, TrendingUp } from "lucide-react";
+import { MapPin, Users, Calendar, ArrowUpRight, Star, TrendingUp, TrendingDown } from "lucide-react";
 import ScoreBadge from "@/components/scoring/ScoreBadge";
 import SignalBadge from "@/components/scoring/SignalBadge";
+import Sparkline from "@/components/ui/Sparkline";
 import type { CompanyWithFit } from "@/types";
-import { isFavoriteSiren, toggleFavoriteSiren } from "@/lib/favorites";
 import { EMPLOYEE_RANGES } from "@/types";
+import { isFavoriteSiren, toggleFavoriteSiren } from "@/lib/favorites";
+import { toast } from "@/lib/toast";
 
 export default function CompanyCard({ company }: { company: CompanyWithFit }) {
   const [isFavorite, setIsFavorite] = useState(false);
@@ -24,14 +26,27 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
         : `${Math.round(ageInMonths / 12)} ans`;
 
   const latestFinance = company.finances?.[0];
+  const prevFinance = company.finances?.[1];
+
   const margeNette =
     latestFinance?.ca && latestFinance?.resultatNet != null && latestFinance.ca > 0
       ? Math.round((latestFinance.resultatNet / latestFinance.ca) * 100)
       : null;
 
-  const employeeLabel = company.employeeRange && company.employeeRange !== "NN"
-    ? EMPLOYEE_RANGES[company.employeeRange] ?? `${company.employeeRange} sal.`
-    : null;
+  // CA des 2–4 dernières années pour la sparkline (ordre chrono croissant)
+  const caHistory = (company.finances ?? [])
+    .filter((f) => f.ca != null)
+    .slice(0, 4)
+    .reverse()
+    .map((f) => f.ca as number);
+
+  const caGrowing =
+    caHistory.length >= 2 ? caHistory[caHistory.length - 1] >= caHistory[0] : null;
+
+  const employeeLabel =
+    company.employeeRange && company.employeeRange !== "NN"
+      ? EMPLOYEE_RANGES[company.employeeRange] ?? `${company.employeeRange} sal.`
+      : null;
 
   useEffect(() => {
     setIsFavorite(isFavoriteSiren(company.siren));
@@ -39,6 +54,18 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
     window.addEventListener("favorites:changed", sync);
     return () => window.removeEventListener("favorites:changed", sync);
   }, [company.siren]);
+
+  const handleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = toggleFavoriteSiren(company.siren);
+    const added = next.includes(company.siren);
+    setIsFavorite(added);
+    toast(
+      added ? `${company.name} ajouté aux favoris` : `${company.name} retiré des favoris`,
+      added ? "success" : "info"
+    );
+  };
 
   return (
     <Link
@@ -57,21 +84,20 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
         e.currentTarget.style.backgroundColor = "hsl(var(--surface))";
       }}
     >
+      {/* Score + forme juridique */}
       <div className="flex items-start gap-3 md:block">
-        <ScoreBadge score={company.score} />
+        <ScoreBadge score={company.score} details={company.scoreDetails} />
         {company.legalForm && (
           <span
             className="inline-flex md:mt-3 text-[11px] px-2 py-0.5 rounded font-medium"
-            style={{
-              backgroundColor: "hsl(var(--surface-2))",
-              color: "hsl(var(--text-faint))",
-            }}
+            style={{ backgroundColor: "hsl(var(--surface-2))", color: "hsl(var(--text-faint))" }}
           >
             {company.legalForm}
           </span>
         )}
       </div>
 
+      {/* Corps */}
       <div className="min-w-0 space-y-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -84,10 +110,7 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
             {company.categoryEntreprise && (
               <span
                 className="text-[11px] px-2 py-0.5 rounded font-medium"
-                style={{
-                  backgroundColor: "hsl(var(--surface-2))",
-                  color: "hsl(var(--text-faint))",
-                }}
+                style={{ backgroundColor: "hsl(var(--surface-2))", color: "hsl(var(--text-faint))" }}
               >
                 {company.categoryEntreprise}
               </span>
@@ -95,10 +118,7 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
             {company.fitScore !== company.score && (
               <span
                 className="text-[11px] px-2 py-0.5 rounded font-medium"
-                style={{
-                  backgroundColor: "hsl(var(--accent-muted))",
-                  color: "hsl(var(--accent))",
-                }}
+                style={{ backgroundColor: "hsl(var(--accent-muted))", color: "hsl(var(--accent))" }}
               >
                 Fit {company.fitScore}
               </span>
@@ -106,13 +126,13 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
           </div>
 
           {company.nafLabel && (
-            <p className="text-sm max-w-3xl" style={{ color: "hsl(var(--accent))" }}>
+            <p className="text-sm" style={{ color: "hsl(var(--accent))" }}>
               {company.nafCode} — {company.nafLabel}
             </p>
           )}
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 items-center">
           {company.city && (
             <span className="flex items-center gap-1 text-xs" style={{ color: "hsl(var(--text-faint))" }}>
               <MapPin className="w-3 h-3" />
@@ -136,9 +156,15 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
               className="flex items-center gap-1 text-xs font-mono"
               style={{ color: margeNette >= 0 ? "hsl(var(--emerald))" : "hsl(var(--red))" }}
             >
-              <TrendingUp className="w-3 h-3" />
+              {margeNette >= 0
+                ? <TrendingUp className="w-3 h-3" />
+                : <TrendingDown className="w-3 h-3" />
+              }
               marge {margeNette > 0 ? "+" : ""}{margeNette}%
             </span>
+          )}
+          {caHistory.length >= 2 && (
+            <Sparkline values={caHistory} positive={caGrowing ?? true} />
           )}
         </div>
 
@@ -157,16 +183,13 @@ export default function CompanyCard({ company }: { company: CompanyWithFit }) {
         )}
       </div>
 
+      {/* Actions */}
       <div className="hidden md:flex items-start justify-end">
         <div className="flex items-center gap-3">
           <button
             type="button"
             aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsFavorite(toggleFavoriteSiren(company.siren).includes(company.siren));
-            }}
+            onClick={handleFavorite}
             className="inline-flex items-center justify-center w-8 h-8 rounded-full border transition-colors"
             style={{
               borderColor: isFavorite ? "hsl(var(--accent) / 0.35)" : "hsl(var(--border-subtle))",
